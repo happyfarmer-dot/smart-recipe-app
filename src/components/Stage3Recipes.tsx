@@ -217,7 +217,7 @@ export const Stage3Recipes: React.FC<Stage3RecipesProps> = ({
           </h2>
           <p className="mt-0.5 text-xs text-stone-500">
             {filters.servings}・時間{filters.maxTime}・設備{filters.equipment}
-            ・目標：{filters.dietaryGoal}
+            ・菜系：{filters.cuisineStyle}・模式：{filters.dietaryGoal}
           </p>
         </div>
 

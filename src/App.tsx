@@ -79,6 +79,7 @@ export function App() {
     servings: '2人',
     maxTime: '30分鐘內',
     equipment: '不限',
+    cuisineStyle: '不限',
     dietaryGoal: '不限',
     enableUnlockMode: true,
   });

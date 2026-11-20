@@ -495,7 +495,8 @@ ${seasoningText}
 - 預計份量：${filters.servings}
 - 料理時間上限：${filters.maxTime}
 - 烹調設備偏好：${filters.equipment}
-- 飲食目標：${filters.dietaryGoal}
+- 菜系風味方向：${filters.cuisineStyle}
+- 飲食目標與餐飲模式：${filters.dietaryGoal}
 
 【嚴格規則（務必遵守）】
 1. **readyRecipes（至少 3 道）**：必須 100% 僅使用上述現有食材與已勾選調味料即可完成，嚴禁偷渡未勾選調味料，missingKeyIngredients 必須為空陣列 []，category 設為 "ready"。

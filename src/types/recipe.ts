@@ -34,8 +34,24 @@ export interface SeasoningGroup {
 export type ServingsOption = '1人' | '2人' | '3-4人';
 export type MaxTimeOption = '15分鐘內' | '30分鐘內' | '不限';
 export type EquipmentOption = '平底鍋' | '電鍋' | '氣炸鍋' | '舒肥機' | '不限';
+export type CuisineStyleOption =
+  | '不限'
+  | '台式'
+  | '中式'
+  | '日式'
+  | '韓式'
+  | '義式'
+  | '泰式'
+  | '美式/西式';
+
 export type DietaryGoalOption =
   | '不限'
+  | '健康餐'
+  | '減脂餐'
+  | '增肌餐'
+  | '生酮飲食'
+  | '地中海料理'
+  | '蔬食'
   | '高蛋白'
   | '低碳水'
   | '低油清爽'
@@ -45,6 +61,7 @@ export interface RecipeFilters {
   servings: ServingsOption;
   maxTime: MaxTimeOption;
   equipment: EquipmentOption;
+  cuisineStyle: CuisineStyleOption;
   dietaryGoal: DietaryGoalOption;
   enableUnlockMode: boolean;
 }

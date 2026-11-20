@@ -16,6 +16,7 @@ import {
   DEFAULT_SEASONING_GROUPS,
 } from '../constants/seasonings';
 import type {
+  CuisineStyleOption,
   DietaryGoalOption,
   EquipmentOption,
   MaxTimeOption,
@@ -40,7 +41,29 @@ interface Stage2SeasoningsProps {
 const SERVINGS_OPTIONS: ServingsOption[] = ['1人', '2人', '3-4人'];
 const MAX_TIME_OPTIONS: MaxTimeOption[] = ['15分鐘內', '30分鐘內', '不限'];
 const EQUIPMENT_OPTIONS: EquipmentOption[] = ['不限', '平底鍋', '電鍋', '氣炸鍋', '舒肥機'];
-const DIETARY_GOAL_OPTIONS: DietaryGoalOption[] = ['不限', '高蛋白', '低碳水', '低油清爽', '快速備餐'];
+const CUISINE_STYLE_OPTIONS: CuisineStyleOption[] = [
+  '不限',
+  '台式',
+  '中式',
+  '日式',
+  '韓式',
+  '義式',
+  '泰式',
+  '美式/西式',
+];
+const DIETARY_GOAL_OPTIONS: DietaryGoalOption[] = [
+  '不限',
+  '健康餐',
+  '減脂餐',
+  '增肌餐',
+  '生酮飲食',
+  '地中海料理',
+  '蔬食',
+  '高蛋白',
+  '低碳水',
+  '低油清爽',
+  '快速備餐',
+];
 
 export const Stage2Seasonings: React.FC<Stage2SeasoningsProps> = ({
   selectedSeasonings,
@@ -375,10 +398,33 @@ export const Stage2Seasonings: React.FC<Stage2SeasoningsProps> = ({
               </div>
             </div>
 
+            {/* Cuisine Style */}
+            <div>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">
+                食譜風味／菜系方向
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {CUISINE_STYLE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => onChangeFilters({ ...filters, cuisineStyle: opt })}
+                    className={`rounded-xl border px-3.5 py-2 text-sm font-medium transition-colors ${
+                      filters.cuisineStyle === opt
+                        ? 'border-[#C84B31] bg-[#C84B31] text-white'
+                        : 'border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100'
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Dietary Goal (功能 5) */}
             <div>
               <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">
-                飲食目標濾鏡
+                營養素與餐飲模式傾向
               </label>
               <div className="flex flex-wrap gap-2">
                 {DIETARY_GOAL_OPTIONS.map((opt) => (
