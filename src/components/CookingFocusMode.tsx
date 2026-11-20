@@ -19,21 +19,37 @@ interface CookingFocusModeProps {
   onExit: () => void;
 }
 
+interface StepDuration {
+  label: string;
+  seconds: number;
+}
+
 /**
- * 從步驟文字中擷取第一個時間（支援 小時 / 分鐘 / 分 / 秒），回傳總秒數
+ * 從步驟文字中擷取所有時間（支援 小時 / 分鐘 / 分 / 秒），回傳不重複的時間選項
  */
-function extractStepDurationSeconds(text: string): number | null {
-  const match = text.match(/(\d+(?:\.\d+)?)\s*(?:個)?(小時|分鐘|分|秒鐘|秒)/);
-  if (!match) return null;
+function extractStepDurations(text: string): StepDuration[] {
+  const regex = /(\d+(?:\.\d+)?)\s*(?:個)?(小時|分鐘|分|秒鐘|秒)/g;
+  const results: StepDuration[] = [];
+  const seen = new Set<string>();
 
-  const value = parseFloat(match[1]);
-  if (Number.isNaN(value) || value <= 0) return null;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    const value = parseFloat(match[1]);
+    if (Number.isNaN(value) || value <= 0) continue;
 
-  const unit = match[2];
-  if (unit === '小時') return Math.round(value * 3600);
-  if (unit === '分鐘' || unit === '分') return Math.round(value * 60);
-  if (unit === '秒鐘' || unit === '秒') return Math.round(value);
-  return null;
+    const unit = match[2];
+    let seconds = 0;
+    if (unit === '小時') seconds = Math.round(value * 3600);
+    else if (unit === '分鐘' || unit === '分') seconds = Math.round(value * 60);
+    else if (unit === '秒鐘' || unit === '秒') seconds = Math.round(value);
+
+    const label = `${match[1]} ${unit}`;
+    if (seconds > 0 && !seen.has(label)) {
+      seen.add(label);
+      results.push({ label, seconds });
+    }
+  }
+  return results;
 }
 
 function formatCountdown(totalSeconds: number): string {
@@ -87,10 +103,13 @@ export const CookingFocusMode: React.FC<CookingFocusModeProps> = ({
     totalSteps > 0 ? Math.round(((stepIndex + 1) / totalSteps) * 100) : 100;
 
   const currentStepText = recipe.steps[stepIndex] || '';
-  const detectedSeconds = useMemo(
-    () => extractStepDurationSeconds(currentStepText),
+  const durations = useMemo(
+    () => extractStepDurations(currentStepText),
     [currentStepText]
   );
+
+  const [selectedDurationIdx, setSelectedDurationIdx] = useState(0);
+  const activeDuration = durations[selectedDurationIdx] ?? durations[0] ?? null;
 
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
   const [isRunning, setIsRunning] = useState(false);
@@ -98,10 +117,18 @@ export const CookingFocusMode: React.FC<CookingFocusModeProps> = ({
 
   // 切換步驟時重設計時器
   useEffect(() => {
+    setSelectedDurationIdx(0);
     setIsRunning(false);
     setIsFinished(false);
-    setRemainingSeconds(detectedSeconds ?? 0);
-  }, [stepIndex, detectedSeconds]);
+    setRemainingSeconds(durations[0]?.seconds ?? 0);
+  }, [stepIndex, durations]);
+
+  const handleSelectDuration = (idx: number) => {
+    setSelectedDurationIdx(idx);
+    setIsRunning(false);
+    setIsFinished(false);
+    setRemainingSeconds(durations[idx]?.seconds ?? 0);
+  };
 
   // 倒數計時迴圈
   useEffect(() => {
@@ -126,8 +153,8 @@ export const CookingFocusMode: React.FC<CookingFocusModeProps> = ({
   }, [isRunning]);
 
   const handleToggleTimer = () => {
-    if (isFinished && detectedSeconds) {
-      setRemainingSeconds(detectedSeconds);
+    if (isFinished && activeDuration) {
+      setRemainingSeconds(activeDuration.seconds);
       setIsFinished(false);
       setIsRunning(true);
       return;
@@ -138,7 +165,7 @@ export const CookingFocusMode: React.FC<CookingFocusModeProps> = ({
   const handleResetTimer = () => {
     setIsRunning(false);
     setIsFinished(false);
-    setRemainingSeconds(detectedSeconds ?? 0);
+    setRemainingSeconds(activeDuration?.seconds ?? 0);
   };
 
   const handleNext = () => {
@@ -217,9 +244,9 @@ export const CookingFocusMode: React.FC<CookingFocusModeProps> = ({
           </p>
 
           {/* 步驟倒數計時器（偵測到時間時自動顯示） */}
-          {detectedSeconds !== null && (
+          {activeDuration !== null && (
             <div
-              className={`mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-4 transition ${
+              className={`mt-6 space-y-3 rounded-2xl border p-4 transition ${
                 isFinished
                   ? 'border-emerald-500/60 bg-emerald-950/60'
                   : isRunning
@@ -227,60 +254,84 @@ export const CookingFocusMode: React.FC<CookingFocusModeProps> = ({
                   : 'border-stone-700 bg-stone-800/80'
               }`}
             >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`flex h-12 w-12 items-center justify-center rounded-xl ${
-                    isFinished
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-stone-700 text-amber-300'
-                  }`}
-                >
-                  <Timer className="h-6 w-6" />
+              {durations.length > 1 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-stone-400">
+                    選擇計時：
+                  </span>
+                  {durations.map((d, idx) => (
+                    <button
+                      key={d.label}
+                      type="button"
+                      onClick={() => handleSelectDuration(idx)}
+                      className={`rounded-lg px-3 py-1 text-xs font-bold transition ${
+                        selectedDurationIdx === idx
+                          ? 'bg-[#C84B31] text-white'
+                          : 'bg-stone-700 text-stone-300 hover:bg-stone-600'
+                      }`}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
                 </div>
-                <div>
-                  <div className="text-xs font-semibold text-stone-400">
-                    {isFinished ? '⏰ 倒數時間到！' : '步驟倒數計時'}
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`flex h-12 w-12 items-center justify-center rounded-xl ${
+                      isFinished
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-stone-700 text-amber-300'
+                    }`}
+                  >
+                    <Timer className="h-6 w-6" />
                   </div>
-                  <div className="font-mono text-3xl font-bold tracking-wider text-white">
-                    {formatCountdown(remainingSeconds)}
+                  <div>
+                    <div className="text-xs font-semibold text-stone-400">
+                      {isFinished ? '⏰ 倒數時間到！' : '步驟倒數計時'}
+                    </div>
+                    <div className="font-mono text-3xl font-bold tracking-wider text-white">
+                      {formatCountdown(remainingSeconds)}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleToggleTimer}
-                  id="focus-timer-toggle-btn"
-                  className={`inline-flex min-h-[48px] items-center gap-2 rounded-xl px-5 py-2.5 text-base font-bold text-white shadow-sm transition active:scale-[0.98] ${
-                    isRunning
-                      ? 'bg-amber-600 hover:bg-amber-500'
-                      : 'bg-[#C84B31] hover:bg-[#B03E26]'
-                  }`}
-                >
-                  {isRunning ? (
-                    <>
-                      <Pause className="h-5 w-5" />
-                      <span>暫停</span>
-                    </>
-                  ) : (
-                    <>
-                      <Play className="h-5 w-5" />
-                      <span>{isFinished ? '再計時一次' : '開始倒數'}</span>
-                    </>
-                  )}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleToggleTimer}
+                    id="focus-timer-toggle-btn"
+                    className={`inline-flex min-h-[48px] items-center gap-2 rounded-xl px-5 py-2.5 text-base font-bold text-white shadow-sm transition active:scale-[0.98] ${
+                      isRunning
+                        ? 'bg-amber-600 hover:bg-amber-500'
+                        : 'bg-[#C84B31] hover:bg-[#B03E26]'
+                    }`}
+                  >
+                    {isRunning ? (
+                      <>
+                        <Pause className="h-5 w-5" />
+                        <span>暫停</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-5 w-5" />
+                        <span>{isFinished ? '再計時一次' : '開始倒數'}</span>
+                      </>
+                    )}
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={handleResetTimer}
-                  id="focus-timer-reset-btn"
-                  className="inline-flex min-h-[48px] items-center justify-center rounded-xl border border-stone-600 bg-stone-800 px-3.5 text-stone-200 transition hover:bg-stone-700"
-                  aria-label="重設倒數計時"
-                  title="重設"
-                >
-                  <RotateCcw className="h-5 w-5" />
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleResetTimer}
+                    id="focus-timer-reset-btn"
+                    className="inline-flex min-h-[48px] items-center justify-center rounded-xl border border-stone-600 bg-stone-800 px-3.5 text-stone-200 transition hover:bg-stone-700"
+                    aria-label="重設倒數計時"
+                    title="重設"
+                  >
+                    <RotateCcw className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
             </div>
           )}
