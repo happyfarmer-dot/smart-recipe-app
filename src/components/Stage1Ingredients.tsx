@@ -28,6 +28,7 @@ interface Stage1IngredientsProps {
   onRecognize: () => void;
   onNextStep: () => void;
   hasApiKey: boolean;
+  isOnline: boolean;
   onOpenSettings: () => void;
 }
 
@@ -42,6 +43,7 @@ export const Stage1Ingredients: React.FC<Stage1IngredientsProps> = ({
   onRecognize,
   onNextStep,
   hasApiKey,
+  isOnline,
   onOpenSettings,
 }) => {
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -263,7 +265,7 @@ export const Stage1Ingredients: React.FC<Stage1IngredientsProps> = ({
 
               <button
                 type="button"
-                disabled={isRecognizing || isCompressing}
+                disabled={isRecognizing || isCompressing || !isOnline}
                 onClick={onRecognize}
                 className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-[#D95D39] px-6 py-3 text-base font-bold text-white shadow-sm transition-all hover:bg-[#C24D2B] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 sm:ml-auto sm:w-auto"
               >

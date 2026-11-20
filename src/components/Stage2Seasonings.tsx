@@ -16,6 +16,7 @@ import {
   DEFAULT_SEASONING_GROUPS,
 } from '../constants/seasonings';
 import type {
+  DietaryGoalOption,
   EquipmentOption,
   MaxTimeOption,
   RecipeFilters,
@@ -31,6 +32,7 @@ interface Stage2SeasoningsProps {
   filters: RecipeFilters;
   onChangeFilters: (next: RecipeFilters) => void;
   ingredientCount: number;
+  isOnline: boolean;
   onBack: () => void;
   onGenerateRecipes: () => void;
 }
@@ -38,6 +40,7 @@ interface Stage2SeasoningsProps {
 const SERVINGS_OPTIONS: ServingsOption[] = ['1人', '2人', '3-4人'];
 const MAX_TIME_OPTIONS: MaxTimeOption[] = ['15分鐘內', '30分鐘內', '不限'];
 const EQUIPMENT_OPTIONS: EquipmentOption[] = ['不限', '平底鍋', '電鍋', '氣炸鍋', '舒肥機'];
+const DIETARY_GOAL_OPTIONS: DietaryGoalOption[] = ['不限', '高蛋白', '低碳水', '低油清爽', '快速備餐'];
 
 export const Stage2Seasonings: React.FC<Stage2SeasoningsProps> = ({
   selectedSeasonings,
@@ -48,6 +51,7 @@ export const Stage2Seasonings: React.FC<Stage2SeasoningsProps> = ({
   filters,
   onChangeFilters,
   ingredientCount,
+  isOnline,
   onBack,
   onGenerateRecipes,
 }) => {
@@ -370,6 +374,54 @@ export const Stage2Seasonings: React.FC<Stage2SeasoningsProps> = ({
                 ))}
               </div>
             </div>
+
+            {/* Dietary Goal (功能 5) */}
+            <div>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">
+                飲食目標濾鏡
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {DIETARY_GOAL_OPTIONS.map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => onChangeFilters({ ...filters, dietaryGoal: opt })}
+                    className={`rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
+                      filters.dietaryGoal === opt
+                        ? 'border-[#2F6B4F] bg-[#2F6B4F] text-white'
+                        : 'border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100'
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Unlock Mode Toggle (功能 4) */}
+            <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3.5">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={filters.enableUnlockMode}
+                  onChange={(e) =>
+                    onChangeFilters({
+                      ...filters,
+                      enableUnlockMode: e.target.checked,
+                    })
+                  }
+                  className="mt-1 h-4 w-4 rounded border-stone-300 accent-[#C84B31]"
+                />
+                <div>
+                  <span className="text-sm font-bold text-stone-900">
+                    同時推薦「差 1–2 樣食材即可解鎖」的進階食譜
+                  </span>
+                  <p className="mt-0.5 text-xs text-stone-600">
+                    開啟後除了 100% 現有食材可做的料理外，還會額外推薦 2 道只需補買少許食材即可升級風味的食譜，並附帶一鍵複製採買清單。
+                  </p>
+                </div>
+              </label>
+            </div>
           </div>
         )}
       </section>
@@ -387,11 +439,12 @@ export const Stage2Seasonings: React.FC<Stage2SeasoningsProps> = ({
 
         <button
           type="button"
+          disabled={!isOnline}
           onClick={onGenerateRecipes}
-          className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-[#D95D39] px-8 py-3.5 text-base font-bold text-white shadow-md transition-all hover:bg-[#C24D2B] active:scale-[0.99]"
+          className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-[#D95D39] px-8 py-3.5 text-base font-bold text-white shadow-md transition-all hover:bg-[#C24D2B] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-stone-500"
         >
           <Sparkles className="h-5 w-5" />
-          <span>AI 生成專屬食譜</span>
+          <span>{isOnline ? 'AI 生成專屬食譜' : '離線中（無法生成食譜）'}</span>
         </button>
       </div>
     </div>

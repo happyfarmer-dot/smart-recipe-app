@@ -1,19 +1,23 @@
 import { useCallback, useMemo, useState } from 'react';
+import { Camera, Heart, PackageCheck, Settings, WifiOff } from 'lucide-react';
 import type {
   AppSettings,
   AppStep,
   CompressedImage,
   IngredientItem,
+  MainTab,
   Recipe,
   RecipeFilters,
+  SeasoningInventoryMeta,
 } from './types';
 import {
   DEFAULT_MODEL_NAME,
   DEFAULT_SELECTED_SEASONINGS,
 } from './constants/seasonings';
 import { useLocalStorage } from './hooks/useLocalStorage';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
 import {
-  generateRecipes,
+  generateDualTrackRecipes,
   getEffectiveApiKey,
   recognizeIngredientsFromImages,
 } from './services/gemini';
@@ -25,15 +29,18 @@ import { Stage3Recipes } from './components/Stage3Recipes';
 import { RecipeDetailModal } from './components/RecipeDetailModal';
 import { SettingsModal } from './components/SettingsModal';
 import { FavoritesModal } from './components/FavoritesModal';
+import { PantryModal } from './components/PantryModal';
 
 const STORAGE_KEYS = {
   SETTINGS: 'fridge_wizard_settings_v1',
   SEASONINGS: 'fridge_wizard_seasonings_v1',
   CUSTOM_SEASONINGS: 'fridge_wizard_custom_seasonings_v1',
-  FAVORITES: 'fridge_wizard_favorites_v1',
+  FAVORITES: 'fridge_wizard_favorites_v2',
 };
 
 export function App() {
+  const isOnline = useOnlineStatus();
+
   // Persistent state in localStorage
   const [settings, setSettings] = useLocalStorage<AppSettings>(
     STORAGE_KEYS.SETTINGS,
@@ -54,8 +61,12 @@ export function App() {
     STORAGE_KEYS.FAVORITES,
     []
   );
+  const [seasoningMeta, setSeasoningMeta] = useLocalStorage<
+    Record<string, SeasoningInventoryMeta>
+  >('fridge_wizard_seasoning_meta_v1', {});
 
-  // Ephemeral workflow state
+  // Navigation & workflow state
+  const [activeTab, setActiveTab] = useState<MainTab>('cook');
   const [currentStep, setCurrentStep] = useState<AppStep>(1);
   const [maxReachedStep, setMaxReachedStep] = useState<AppStep>(1);
 
@@ -68,14 +79,18 @@ export function App() {
     servings: '2人',
     maxTime: '30分鐘內',
     equipment: '不限',
+    dietaryGoal: '不限',
+    enableUnlockMode: true,
   });
 
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [readyRecipes, setReadyRecipes] = useState<Recipe[]>([]);
+  const [unlockableRecipes, setUnlockableRecipes] = useState<Recipe[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
 
   // Modals state
   const [activeRecipe, setActiveRecipe] = useState<Recipe | null>(null);
+  const [isPantryOpen, setIsPantryOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFavoritesOpen, setIsFavoritesOpen] = useState(false);
 
@@ -98,6 +113,7 @@ export function App() {
   );
 
   const navigateToStep = (step: AppStep) => {
+    setActiveTab('cook');
     setCurrentStep(step);
     setMaxReachedStep((prev) => (step > prev ? step : prev));
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -114,6 +130,10 @@ export function App() {
   };
 
   const handleRecognize = async () => {
+    if (!isOnline) {
+      setRecognitionError('目前處於離線狀態，無法進行 AI 食材辨識。');
+      return;
+    }
     setIsRecognizing(true);
     setRecognitionError(null);
     try {
@@ -157,17 +177,22 @@ export function App() {
   // Stage 3 handlers
   const handleGenerateRecipes = async () => {
     navigateToStep(3);
+    if (!isOnline) {
+      setGenerationError('目前處於離線狀態，無法進行 AI 食譜生成。');
+      return;
+    }
     setIsGenerating(true);
     setGenerationError(null);
     try {
-      const generated = await generateRecipes({
+      const result = await generateDualTrackRecipes({
         ingredients,
         seasonings: selectedSeasonings,
         filters,
         apiKey: effectiveApiKey,
         modelName: settings.modelName || DEFAULT_MODEL_NAME,
       });
-      setRecipes(generated);
+      setReadyRecipes(result.readyRecipes);
+      setUnlockableRecipes(result.unlockableRecipes);
     } catch (err) {
       setGenerationError(
         err instanceof Error ? err.message : '生成食譜時發生錯誤，請重試。'
@@ -197,7 +222,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-[#1C1917]">
+    <div className="min-h-screen bg-[#FAF8F5] pb-20 text-[#1C1917]">
       <Header
         hasApiKey={hasApiKey}
         favoritesCount={favorites.length}
@@ -212,8 +237,31 @@ export function App() {
         onStepClick={navigateToStep}
       />
 
-      <main className="mx-auto max-w-4xl px-4 pt-3 pb-16 sm:px-6">
-        {!hasApiKey && (
+      <main className="mx-auto max-w-4xl px-4 pt-3 pb-10 sm:px-6">
+        {/* 離線狀態提示 */}
+        {!isOnline && (
+          <div
+            role="status"
+            className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-stone-300 bg-stone-800 px-4 py-3 text-sm text-white shadow-xs"
+          >
+            <div className="flex items-center gap-2.5">
+              <WifiOff className="h-4 w-4 shrink-0 text-amber-300" />
+              <span>
+                目前為離線模式：AI 辨識與生成功能暫時停用，您仍可瀏覽「我的收藏」離線食譜。
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsFavoritesOpen(true)}
+              className="shrink-0 rounded-xl bg-white/15 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/25"
+            >
+              查看收藏
+            </button>
+          </div>
+        )}
+
+        {/* API Key 提醒 */}
+        {!hasApiKey && isOnline && (
           <div className="mb-4 flex flex-col justify-between gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-center">
             <span>
               提醒：尚未設定 Gemini API Key，請先點擊設定填入您的金鑰以啟用 AI 辨識與食譜生成。
@@ -240,6 +288,7 @@ export function App() {
             onRecognize={handleRecognize}
             onNextStep={() => navigateToStep(2)}
             hasApiKey={hasApiKey}
+            isOnline={isOnline}
             onOpenSettings={() => setIsSettingsOpen(true)}
           />
         )}
@@ -254,6 +303,7 @@ export function App() {
             filters={filters}
             onChangeFilters={setFilters}
             ingredientCount={ingredients.length}
+            isOnline={isOnline}
             onBack={() => navigateToStep(1)}
             onGenerateRecipes={handleGenerateRecipes}
           />
@@ -261,24 +311,135 @@ export function App() {
 
         {currentStep === 3 && (
           <Stage3Recipes
-            recipes={recipes}
+            readyRecipes={readyRecipes}
+            unlockableRecipes={unlockableRecipes}
             isGenerating={isGenerating}
             generationError={generationError}
             filters={filters}
-            onChangeFilters={setFilters}
+            isOnline={isOnline}
             onRegenerate={handleGenerateRecipes}
             onBackToSeasonings={() => navigateToStep(2)}
             onSelectRecipe={(recipe) => setActiveRecipe(recipe)}
             isFavorite={isFavorite}
             onToggleFavorite={handleToggleFavorite}
             onOpenSettings={() => setIsSettingsOpen(true)}
-            ingredientNames={ingredients.map((i) => i.name)}
-            seasoningCount={selectedSeasonings.length}
           />
         )}
       </main>
 
+      {/* 手機優先底部導覽列 */}
+      <nav
+        aria-label="主導覽"
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-200 bg-white/95 backdrop-blur-md"
+      >
+        <div className="mx-auto grid max-w-4xl grid-cols-4">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('cook');
+              setIsPantryOpen(false);
+              setIsFavoritesOpen(false);
+              setIsSettingsOpen(false);
+            }}
+            className={`flex flex-col items-center justify-center gap-1 py-2.5 text-xs font-semibold transition ${
+              activeTab === 'cook' &&
+              !isPantryOpen &&
+              !isFavoritesOpen &&
+              !isSettingsOpen
+                ? 'text-[#C84B31]'
+                : 'text-stone-500 hover:text-stone-800'
+            }`}
+          >
+            <Camera className="h-5 w-5" />
+            <span>開始辨識</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('pantry');
+              setIsPantryOpen(true);
+              setIsFavoritesOpen(false);
+              setIsSettingsOpen(false);
+            }}
+            className={`flex flex-col items-center justify-center gap-1 py-2.5 text-xs font-semibold transition ${
+              isPantryOpen
+                ? 'text-[#C84B31]'
+                : 'text-stone-500 hover:text-stone-800'
+            }`}
+          >
+            <PackageCheck className="h-5 w-5" />
+            <span>調味料櫥櫃</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('favorites');
+              setIsFavoritesOpen(true);
+              setIsPantryOpen(false);
+              setIsSettingsOpen(false);
+            }}
+            className={`relative flex flex-col items-center justify-center gap-1 py-2.5 text-xs font-semibold transition ${
+              isFavoritesOpen
+                ? 'text-[#C84B31]'
+                : 'text-stone-500 hover:text-stone-800'
+            }`}
+          >
+            <div className="relative">
+              <Heart className="h-5 w-5" />
+              {favorites.length > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#C84B31] px-1 text-[10px] font-bold text-white">
+                  {favorites.length}
+                </span>
+              )}
+            </div>
+            <span>我的收藏</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('settings');
+              setIsSettingsOpen(true);
+              setIsPantryOpen(false);
+              setIsFavoritesOpen(false);
+            }}
+            className={`flex flex-col items-center justify-center gap-1 py-2.5 text-xs font-semibold transition ${
+              isSettingsOpen
+                ? 'text-[#C84B31]'
+                : 'text-stone-500 hover:text-stone-800'
+            }`}
+          >
+            <Settings className="h-5 w-5" />
+            <span>設定</span>
+          </button>
+        </div>
+      </nav>
+
       {/* Modals */}
+      <PantryModal
+        isOpen={isPantryOpen}
+        selectedSeasonings={selectedSeasonings}
+        customSeasonings={customSeasonings}
+        seasoningMeta={seasoningMeta}
+        onToggleSeasoning={(name) =>
+          setSelectedSeasonings((prev) =>
+            prev.includes(name)
+              ? prev.filter((s) => s !== name)
+              : [...prev, name]
+          )
+        }
+        onAddCustomSeasoning={handleAddCustomSeasoning}
+        onUpdateMeta={(name, meta) =>
+          setSeasoningMeta((prev) => ({ ...prev, [name]: meta }))
+        }
+        onClose={() => {
+          setIsPantryOpen(false);
+          setActiveTab('cook');
+        }}
+      />
+
       <RecipeDetailModal
         recipe={activeRecipe}
         isFavorite={activeRecipe ? isFavorite(activeRecipe) : false}
@@ -289,14 +450,20 @@ export function App() {
       <SettingsModal
         isOpen={isSettingsOpen}
         settings={settings}
-        onClose={() => setIsSettingsOpen(false)}
+        onClose={() => {
+          setIsSettingsOpen(false);
+          setActiveTab('cook');
+        }}
         onSave={setSettings}
       />
 
       <FavoritesModal
         isOpen={isFavoritesOpen}
         favorites={favorites}
-        onClose={() => setIsFavoritesOpen(false)}
+        onClose={() => {
+          setIsFavoritesOpen(false);
+          setActiveTab('cook');
+        }}
         onSelectRecipe={(recipe) => setActiveRecipe(recipe)}
         onRemoveFavorite={handleToggleFavorite}
       />
